@@ -1,10 +1,14 @@
 package mr
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"os"
+)
 import "log"
 import "net/rpc"
 import "hash/fnv"
-
 
 //
 // Map functions return a slice of KeyValue.
@@ -13,6 +17,9 @@ type KeyValue struct {
 	Key   string
 	Value string
 }
+
+var workerID int
+var intermediate []KeyValue
 
 //
 // use ihash(key) % NReduce to choose the reduce
@@ -24,17 +31,44 @@ func ihash(key string) int {
 	return int(h.Sum32() & 0x7fffffff)
 }
 
-
 //
 // main/mrworker.go calls this function.
 //
+func Encoder(intermediate []KeyValue) {
+	oname := "mr-out-"
+	oname = oname + string(workerID)
+	ofile, _ := os.Create(oname)
+
+	enc := json.NewEncoder(ofile)
+	for _, v := range intermediate {
+		enc.Encode(&v)
+	}
+
+}
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
 	// Your worker implementation here.
 
 	// uncomment to send the Example RPC to the master.
-	// CallExample()
+	CallExample()
+	fileName := AskForFile()
+	if fileName != "" {
+		file, err := os.Open(fileName)
+		if err != nil {
+			log.Fatal("open file %v", err)
+		}
+		content, err := ioutil.ReadAll(file)
+		if err != nil {
+			log.Fatal("read file error %v", err)
+
+		}
+		kv := mapf(fileName, string(content))
+		intermediate = append(intermediate, kv...)
+
+	}
+	Encoder(intermediate)
+	//fmt.Print(intermediate)
 
 }
 
@@ -43,6 +77,21 @@ func Worker(mapf func(string, string) []KeyValue,
 //
 // the RPC argument and reply types are defined in rpc.go.
 //
+func AskForFile() string {
+	args := MRArgs{}
+
+	args.AskForFile = 1
+
+	reply := MRReply{}
+
+	call("Master.AskForFileRpc", &args, &reply)
+	workerID = reply.WorkerId
+
+	fmt.Printf("reply.filename :%v\n, reply.workerID:%v", reply.FileName, reply.WorkerId)
+
+	return reply.FileName
+
+}
 func CallExample() {
 
 	// declare an argument structure.
