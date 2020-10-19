@@ -9,24 +9,47 @@ package mr
 import "os"
 import "strconv"
 
-//
-// example to show how to declare the arguments
-// and reply for an RPC.
-//
-type MRArgs struct {
-	AskForFile int
+type ReduceDoneRpcArgs struct {
+	ReduceDoneFileName string
 }
-type MRReply struct {
-	FileName string
-	WorkerId int
-}
-type ExampleArgs struct {
-	X int
+type ReduceDoneRpcReply struct {
+	Ack bool
 }
 
-type ExampleReply struct {
-	Y int
+//rpcname+Args
+//__________________________
+type ReduceRpcArgs struct {
+	AskForReduceFile int
 }
+type ReduceRpcReply struct {
+	NeedToReduceFileName string
+	WorkerId             int
+	ReduceFinish         int
+}
+
+//___________________________________
+
+//____________________________________
+type MapDoneRpcArgs struct {
+	FileName string
+}
+type MapDoneRpcReply struct {
+	Ack bool
+}
+
+//___________________________
+
+//___________________________
+type MapAskArgs struct {
+	AskForFile int
+}
+type MapAskReply struct {
+	FileName  string //MapAsk return file name
+	WorkerId  int
+	MapFinish int
+}
+
+//____________________________
 
 // Add your RPC definitions here.
 

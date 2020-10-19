@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"sort"
 )
 import "log"
 import "net/rpc"
@@ -17,9 +18,17 @@ type KeyValue struct {
 	Key   string
 	Value string
 }
+type ByKey []KeyValue
+
+// for sorting by key.
+func (a ByKey) Len() int           { return len(a) }
+func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 var workerID int
 var intermediate []KeyValue
+
+var cout int
 
 //
 // use ihash(key) % NReduce to choose the reduce
@@ -33,26 +42,29 @@ func ihash(key string) int {
 
 //
 // main/mrworker.go calls this function.
-//
-func Encoder(intermediate []KeyValue) {
-	oname := "mr-out-"
-	oname = oname + string(workerID)
-	ofile, _ := os.Create(oname)
-
-	enc := json.NewEncoder(ofile)
-	for _, v := range intermediate {
-		enc.Encode(&v)
-	}
-
-}
+//@
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
 	// Your worker implementation here.
-
 	// uncomment to send the Example RPC to the master.
-	CallExample()
-	fileName := AskForFile()
+	DoMap(mapf)
+	intermediate = []KeyValue{}
+	fmt.Print(intermediate)
+	DoReduce(reducef)
+
+}
+func AskForFile() (string, int) {
+	args := MapAskArgs{AskForFile: 1}
+	reply := MapAskReply{}
+	call("Master.MapRpc", &args, &reply)
+	workerID = reply.WorkerId
+	fmt.Printf("\nMapAskreply.filename :%v, reply.workerID:%v\n", reply.FileName, reply.WorkerId)
+	return reply.FileName, reply.MapFinish
+
+}
+func DoMap(mapf func(string, string) []KeyValue) {
+	fileName, mapfinish := AskForFile()
 	if fileName != "" {
 		file, err := os.Open(fileName)
 		if err != nil {
@@ -63,13 +75,102 @@ func Worker(mapf func(string, string) []KeyValue,
 			log.Fatal("read file error %v", err)
 
 		}
+
 		kv := mapf(fileName, string(content))
 		intermediate = append(intermediate, kv...)
+		Encoder(intermediate, fileName)
+		args := MapDoneRpcArgs{FileName: fileName}
+		reply := MapDoneRpcReply{}
+		call("Master.PartMapDone", &args, &reply)
 
 	}
-	Encoder(intermediate)
-	//fmt.Print(intermediate)
 
+	if mapfinish == 0 {
+		DoMap(mapf)
+	}
+}
+
+func Encoder(intermediate []KeyValue, originFileName string) string {
+	oname := originFileName + "temp"
+	ofile, _ := os.Create(oname)
+	enc := json.NewEncoder(ofile)
+	for _, v := range intermediate {
+		enc.Encode(&v)
+	}
+	return oname
+}
+func Decode(fileName string) {
+	intermediate = []KeyValue{}
+	file, err := os.Open(fileName)
+	if err != nil {
+		log.Fatal("open intermediate file fail")
+	}
+	fmt.Print("******* worker.go / 75 line DoReduce *******")
+	dec := json.NewDecoder(file)
+	for {
+		var kv KeyValue
+		if err := dec.Decode(&kv); err != nil {
+			break
+		}
+		intermediate = append(intermediate, kv)
+	}
+	sort.Sort(ByKey(intermediate))
+}
+
+func AskForReduceFile() (string, int) {
+	args := ReduceRpcArgs{AskForReduceFile: 1}
+	reply := ReduceRpcReply{}
+	call("Master.ReduceRpc", &args, &reply)
+	return reply.NeedToReduceFileName, reply.ReduceFinish
+}
+func DoReduce(reducef func(string, []string) string) {
+	fmt.Print("\n Now Begin Do Reduce \n")
+	fileName, reduceFinish := AskForReduceFile()
+	fmt.Print("\n Now Begin Do Reduce \n")
+	if fileName != "" {
+		fmt.Print("\n Now Begin Do Decode \n")
+		Decode(fileName)
+		fmt.Print("\n Now Begin Do DoOutPut \n")
+		DoOutput(reducef)
+		fmt.Print("\n Now Begin Do RPC \n")
+		args := ReduceDoneRpcArgs{ReduceDoneFileName: fileName}
+		reply := ReduceDoneRpcReply{}
+		call("Master.PartReduceDone", &args, &reply)
+	}
+	fmt.Print("no file")
+	if reduceFinish == 0 {
+		DoReduce(reducef)
+	}
+
+}
+func DoOutput(reducef func(string, []string) string) {
+	oname := "mr-out-" + string(cout)
+	cout++
+	ofile, _ := os.Create(oname)
+
+	//
+	// call Reduce on each distinct key in intermediate[],
+	// and print the result to mr-out-0.
+	//
+	i := 0
+	for i < len(intermediate) {
+		j := i + 1
+		for j < len(intermediate) && intermediate[j].Key == intermediate[i].Key {
+			j++
+		}
+		values := []string{}
+		for k := i; k < j; k++ {
+			values = append(values, intermediate[k].Value)
+		}
+		output := reducef(intermediate[i].Key, values)
+
+		// this is the correct format for each line of Reduce output.
+		fmt.Fprintf(ofile, "%v %v\n", intermediate[i].Key, output)
+
+		i = j
+	}
+
+	ofile.Close()
 }
 
 //
@@ -77,38 +178,6 @@ func Worker(mapf func(string, string) []KeyValue,
 //
 // the RPC argument and reply types are defined in rpc.go.
 //
-func AskForFile() string {
-	args := MRArgs{}
-
-	args.AskForFile = 1
-
-	reply := MRReply{}
-
-	call("Master.AskForFileRpc", &args, &reply)
-	workerID = reply.WorkerId
-
-	fmt.Printf("reply.filename :%v\n, reply.workerID:%v", reply.FileName, reply.WorkerId)
-
-	return reply.FileName
-
-}
-func CallExample() {
-
-	// declare an argument structure.
-	args := ExampleArgs{}
-
-	// fill in the argument(s).
-	args.X = 99
-
-	// declare a reply structure.
-	reply := ExampleReply{}
-
-	// send the RPC request, wait for the reply.
-	call("Master.Example", &args, &reply)
-
-	// reply.Y should be 100.
-	fmt.Printf("reply.Y %v\n", reply.Y)
-}
 
 //
 // send an RPC request to the master, wait for the response.
