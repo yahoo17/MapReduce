@@ -27,6 +27,8 @@ func (a ByKey) Len() int           { return len(a) }
 func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
+var m_Nmap int
+var m_Nreduce int
 var workerID int
 var intermediate []KeyValue
 
@@ -49,21 +51,86 @@ var ping HeartBeatPing
 //@
 
 func HandleTask(TYPE int, ID int) {
-	fmt.Printf("Get the task to Handle %v %v\n", TYPE, ID)
+	//fmt.Printf("Get the task to Handle %v %v\n", TYPE, ID)
+	if TYPE == 1 {
+		//map task
+		filename := "mr-inter-" + strconv.Itoa(ID) + ".txt"
+		file, err := os.Open(filename)
+		if err != nil {
+			log.Fatal("open file %v", err)
+		}
+		content, err := ioutil.ReadAll(file)
+		if err != nil {
+			log.Fatal("read file error %v", err)
+
+		}
+		originFile := tempToorigin[filename]
+		fmt.Printf("the originFileName is %v\n", originFile)
+		kv := mapf(originFile, string(content))
+		intermediate = []KeyValue{}
+		intermediate = append(intermediate, kv...)
+
+		tasks := make([][]KeyValue, m_Nreduce)
+		for i := 0; i < m_Nmap; i++ {
+			tasks[i] = []KeyValue{}
+		}
+
+		for _, kv := range intermediate {
+			kkk := kv.Key
+			tasks[ihash(kkk)%m_Nreduce] = append(tasks[ihash(kkk)%m_Nreduce], kv)
+		}
+		for i, v := range tasks {
+			Encoder(v, ID, i)
+		}
+
+	} else if TYPE == 2 {
+		// reduce task
+		intermediate = []KeyValue{}
+
+		for i := 0; i < 8; i++ {
+			filename := "mr-inter-" + strconv.Itoa(i) + "-" + strconv.Itoa(ID) + ".txt"
+			Decode(filename)
+		}
+		sort.Sort(ByKey(intermediate))
+		DoOutput(ID)
+
+	}
+}
+func Encoder(iii []KeyValue, mapid int, reduceid int) string {
+	oname := "mr-inter-" + strconv.Itoa(mapid) + "-" + strconv.Itoa(reduceid) + ".txt"
+	ofile, _ := os.Create(oname)
+	enc := json.NewEncoder(ofile)
+	for _, v := range iii {
+		err := enc.Encode(&v)
+		if err != nil {
+			fmt.Print("\n,Encode error\n")
+		}
+	}
+	return oname
 }
 func SendAck(t_TYPE int, t_ID int) HeartBeatPing {
 	ping := HeartBeatPing{t_TYPE, t_ID}
 	return ping
 }
-func Worker(mapf func(string, string) []KeyValue,
-	reducef func(string, []string) string) {
-	hasHulue := false
+
+var mapf func(string, string) []KeyValue
+var reducef func(string, []string) string
+
+func Worker(t_mapf func(string, string) []KeyValue,
+	t_reducef func(string, []string) string) {
+	//hasHulue := false
+	arg := SayHello{}
+	reply := SayHelloReply{}
+	call("Master.SayHelloRpc", &arg, &reply)
+	m_Nmap = reply.NMap
+	m_Nreduce = reply.NReduce
+	fmt.Printf("the map and reduce is %v %v\n", m_Nmap, m_Nreduce)
+	mapf = t_mapf
+	reducef = t_reducef
+
 	for {
 		pong := HeartBeatPong{}
-		if ping.ID == 5 && hasHulue == false {
-			hasHulue = true
-			ping = HeartBeatPing{}
-		}
+
 		call("Master.HeartBeatRpc", &ping, &pong)
 		if pong.TYPE == 7 {
 			os.Exit(1)
@@ -76,79 +143,11 @@ func Worker(mapf func(string, string) []KeyValue,
 		// handle pong
 
 	}
-	// Your worker implementation here.
-	// uncomment to send the Example RPC to the master.
-	//DoMap(mapf)
-	//intermediate = []KeyValue{}
-	//fmt.Print(intermediate)
-	//DoReduce(reducef)
 
 }
-func AskForFile() (string, int) {
-	args := MapAskArgs{AskForFile: 1}
-	reply := MapAskReply{}
-	call("Master.MapRpc", &args, &reply)
-	workerID = reply.WorkerId
-	fmt.Printf("\nMapAskreply.filename :%v, reply.workerID:%v\n", reply.FileName, reply.WorkerId)
-	return reply.FileName, reply.MapFinish
 
-}
-func DoMap(mapf func(string, string) []KeyValue) {
-	fileName, mapfinish := AskForFile()
-	if fileName != "" {
-		file, err := os.Open(fileName)
-		if err != nil {
-			log.Fatal("open file %v", err)
-		}
-		content, err := ioutil.ReadAll(file)
-		if err != nil {
-			log.Fatal("read file error %v", err)
-
-		}
-
-		kv := mapf(fileName, string(content))
-		intermediate = append(intermediate, kv...)
-		tasks := make([][]KeyValue, 10)
-		for i := 0; i < 10; i++ {
-			tasks[i] = []KeyValue{}
-		}
-		for _, kv := range intermediate {
-			kkk := kv.Key
-			tasks[ihash(kkk)%10] = append(tasks[ihash(kkk)%10], kv)
-		}
-
-		for _, v := range tasks {
-			Encoder(v, fileName)
-		}
-		//Encoder(tasks[0], fileName)
-		args := MapDoneRpcArgs{FileName: fileName}
-		reply := MapDoneRpcReply{}
-		call("Master.PartMapDone", &args, &reply)
-
-	}
-
-	if mapfinish == 0 {
-		DoMap(mapf)
-	}
-}
-
-var gggg = 1
-
-func Encoder(iii []KeyValue, originFileName string) string {
-	oname := "mr-temp-" + strconv.Itoa(gggg)
-	gggg++
-	ofile, _ := os.Create(oname)
-	enc := json.NewEncoder(ofile)
-	for _, v := range iii {
-		err := enc.Encode(&v)
-		if err != nil {
-			fmt.Print("\n,Encode error\n")
-		}
-	}
-	return oname
-}
 func Decode(fileName string) {
-	intermediate = []KeyValue{}
+
 	file, err := os.Open(fileName)
 	if err != nil {
 		log.Fatal("open intermediate file fail")
@@ -165,45 +164,10 @@ func Decode(fileName string) {
 	sort.Sort(ByKey(intermediate))
 }
 
-func AskForReduceFile() (string, int) {
-	args := ReduceRpcArgs{AskForReduceFile: 1}
-	reply := ReduceRpcReply{}
-	call("Master.ReduceRpc", &args, &reply)
-	return reply.NeedToReduceFileName, reply.ReduceFinish
-}
-func DoReduce(reducef func(string, []string) string) {
-	for i := 1; i < gggg; i++ {
-		name := "mr-temp-" + strconv.Itoa(i)
-		Decode(name)
-		DoOutput(reducef)
-	}
-	//fmt.Print("\n Now Begin Do Reduce \n")
-	//fileName, reduceFinish := AskForReduceFile()
-	//fmt.Print("\n Now Begin Do Reduce \n")
-	//if fileName != "" {
-	//	fmt.Print("\n Now Begin Do Decode \n")
-	//	Decode(fileName)
-	//	fmt.Print("\n Now Begin Do DoOutPut \n")
-	//	DoOutput(reducef)
-	//	fmt.Print("\n Now Begin Do RPC \n")
-	//	args := ReduceDoneRpcArgs{ReduceDoneFileName: fileName}
-	//	reply := ReduceDoneRpcReply{}
-	//	call("Master.PartReduceDone", &args, &reply)
-	//}
-	//fmt.Print("no file")
-	//if reduceFinish == 0 {
-	//	DoReduce(reducef)
-	//}
-
-}
-func DoOutput(reducef func(string, []string) string) {
-	oname := "mr-out-" + string(cout)
-	cout++
+func DoOutput(reduceId int) {
+	oname := "mr-out-" + strconv.Itoa(reduceId)
 	ofile, _ := os.Create(oname)
-	//
-	// call Reduce on each distinct key in intermediate[],
-	// and print the result to mr-out-0.
-	//
+
 	i := 0
 	for i < len(intermediate) {
 		j := i + 1
@@ -225,13 +189,6 @@ func DoOutput(reducef func(string, []string) string) {
 	ofile.Close()
 }
 
-//
-// example function to show how to make an RPC call to the master.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//
-
-//
 // send an RPC request to the master, wait for the response.
 // usually returns true.
 // returns false if something goes wrong.

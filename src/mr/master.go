@@ -3,7 +3,9 @@ package mr
 import (
 	"container/list"
 	"fmt"
+	"io"
 	"log"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -23,8 +25,17 @@ type Master struct {
 
 	m_mapdone    bool
 	m_reducedone bool
+
+	m_nReduce int
+	m_nMap    int
 }
 
+func (m *Master) SayHelloRpc(hello *SayHello, reply *SayHelloReply) error {
+	reply.NReduce = m.m_nReduce
+	reply.NMap = m.m_nMap
+	return nil
+
+}
 func (m *Master) HandleTimeOut(TaskType int, ID int) {
 	go m.AddToQueue(TaskType, ID)
 }
@@ -45,7 +56,7 @@ func (m *Master) AssignTask() (TYPE int, ID int) {
 	if m.m_mapdone == false {
 
 		if m.MapWorkQueue.Len() == 0 {
-			fmt.Printf("the mapQueue empty ,please wait for map done \n")
+			//fmt.Printf("the mapQueue empty ,please wait for map done \n")
 			return 0, 0
 		}
 		m1.Lock()
@@ -60,7 +71,7 @@ func (m *Master) AssignTask() (TYPE int, ID int) {
 
 	} else if m.m_mapdone == true && m.m_reducedone == false {
 		if m.ReduceWorkQueue.Len() == 0 {
-			fmt.Printf("the reduceQueue empty ,please wait for reduce done\n")
+			//fmt.Printf("the reduceQueue empty ,please wait for reduce done\n")
 			return 0, 0
 		}
 		m1.Lock()
@@ -199,10 +210,31 @@ func (m *Master) MapReduceSplit(TaskType int, n int) {
 		fmt.Printf("MapReduceSplit error\n")
 	}
 }
+
+var tempToorigin map[string]string
+
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{}
 	// Your code here.
+	tempToorigin = make(map[string]string)
+	for i, v := range files {
+
+		filename := "mr-inter-" + strconv.Itoa(i) + ".txt"
+		tempToorigin[filename] = v
+		fmt.Printf("the file name is %v\n", v)
+		ofile, err := os.Create(filename)
+		if err != nil {
+			log.Fatal("open file error\n")
+
+		}
+		srcfile, _ := os.Open(v)
+
+		io.Copy(ofile, srcfile)
+
+	}
 	nMap := len(files)
+	m.m_nMap = nMap
+	m.m_nReduce = nReduce
 	m.MapReduceSplit(1, nMap)
 	m.MapReduceSplit(2, nReduce)
 	m.server()

@@ -9,6 +9,13 @@ package mr
 import "os"
 import "strconv"
 
+type SayHello struct {
+	X int
+}
+type SayHelloReply struct {
+	NReduce int
+	NMap    int
+}
 type HeartBeatPing struct {
 	//ack
 	TYPE int // the same as HeartBeatPong
