@@ -1,9 +1,11 @@
 package mr
 
 import (
+	"container/list"
 	"fmt"
 	"log"
 	"sync"
+	"time"
 )
 import "net"
 import "os"
@@ -11,89 +13,120 @@ import "net/rpc"
 import "net/http"
 
 var m1 sync.Mutex
-var workerId = 1
 
 type Master struct {
-	// Your definitions here.
-	// 0 not begin 1 not finish 2 finish
-	MapFileDone     map[string]int
-	MapFileToWorker map[string]int
+	MapTask    map[int]int // key: MapTaskid value: state
+	ReduceTask map[int]int //
 
-	ReduceFileDone     map[string]int
-	ReduceFileToWorker map[string]int
+	MapWorkQueue    list.List
+	ReduceWorkQueue list.List
+
+	m_mapdone    bool
+	m_reducedone bool
 }
 
-// Your code here -- RPC handlers for the worker to call.
+func (m *Master) HandleTimeOut(TaskType int, ID int) {
+	go m.AddToQueue(TaskType, ID)
+}
+func (m *Master) AddToQueue(TaskType int, ID int) {
+	time.Sleep(time.Second * 100)
+	if TaskType == 1 {
+		if m.MapTask[ID] != 2 {
+			m.MapWorkQueue.PushBack(ID)
+		}
+	} else if TaskType == 2 {
+		if m.ReduceTask[ID] != 2 {
+			m.ReduceWorkQueue.PushBack(ID)
+		}
+	}
 
-//
-// an example RPC handler.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//___________________________________________________________-
-func (m *Master) PartMapDone(args *MapDoneRpcArgs, reply *MapDoneRpcReply) error {
-	m.MapFileDone[args.FileName] = 2
-	temp := args.FileName
-	temp = temp + "temp"
-	m.ReduceFileDone[temp] = 0
-	reply.Ack = true
-	return nil
 }
-func (m *Master) PartReduceDone(args *ReduceDoneRpcArgs, reply *ReduceDoneRpcReply) error {
-	m.ReduceFileDone[args.ReduceDoneFileName] = 2
-	reply.Ack = true
-	return nil
-}
-func (m *Master) ReduceRpc(args *ReduceRpcArgs, reply *ReduceRpcReply) error {
-	if args.AskForReduceFile == 1 {
+func (m *Master) AssignTask() (TYPE int, ID int) {
+	if m.m_mapdone == false {
+
+		if m.MapWorkQueue.Len() == 0 {
+			fmt.Printf("the mapQueue empty ,please wait for map done \n")
+			return 0, 0
+		}
 		m1.Lock()
-		reply.WorkerId = workerId
-		workerId++
-		for k, v := range m.ReduceFileDone {
-			if v == 0 {
-				m.ReduceFileToWorker[k] = workerId
-				reply.NeedToReduceFileName = k
-				v = 1
-				break
+		task := m.MapWorkQueue.Front().Value
+		m.MapWorkQueue.Remove(m.MapWorkQueue.Front())
+		m.MapTask[task.(int)] = 1
+		TYPE = 1
+		ID = task.(int)
+		m.HandleTimeOut(TYPE, ID)
+		m1.Unlock()
+		return TYPE, ID
+
+	} else if m.m_mapdone == true && m.m_reducedone == false {
+		if m.ReduceWorkQueue.Len() == 0 {
+			fmt.Printf("the reduceQueue empty ,please wait for reduce done\n")
+			return 0, 0
+		}
+		m1.Lock()
+		task := m.ReduceWorkQueue.Front().Value
+		m.ReduceWorkQueue.Remove(m.ReduceWorkQueue.Front())
+		//fmt.Printf("task is: %v\n",task )
+		//fmt.Printf("task.(int) is: %v\n",task.(int) )
+		//fmt.Printf("m.ReduceTask is %v\n",m.ReduceTask[0] )
+		m.ReduceTask[task.(int)] = 1
+		TYPE = 2
+		ID = task.(int)
+		m.HandleTimeOut(TYPE, ID)
+		m1.Unlock()
+		//fmt.Printf("return value is %v,%v",TYPE,ID)
+		return TYPE, ID
+
+	} else {
+		return 7, 0
+	}
+
+}
+
+func (m *Master) HeartBeatRpc(ping *HeartBeatPing, pong *HeartBeatPong) error {
+	//Handle ASSIGN TASK_____________________
+	//____________________
+	if ping.TYPE == 1 {
+		m.MapTask[ping.ID] = 2
+		fmt.Printf("TYPE %v ID %v Done \n", ping.TYPE, ping.ID)
+	} else if ping.TYPE == 2 {
+		fmt.Printf("TYPE %v ID %v Done \n", ping.TYPE, ping.ID)
+		m.ReduceTask[ping.ID] = 2
+	}
+
+	pong.TYPE, pong.ID = m.AssignTask()
+	return nil
+}
+
+func (m *Master) Daemon() {
+	for {
+		//fmt.Printf("MapQueue is:\n")
+		//fmt.Print(m.MapWorkQueue)
+		//fmt.Printf("Map Task is:\n")
+		//fmt.Print(m.MapTask)
+		//fmt.Print("\n")
+		if m.m_mapdone == false {
+			if m.MapDone() {
+				m.m_mapdone = true
+				fmt.Print("Map Done (by daemon) \n")
+
 			}
 		}
-		m1.Unlock()
-	}
-	if m.ReduceDone() == false {
-		reply.ReduceFinish = 0
-	}
-	return nil
-
-}
-func (m *Master) MapRpc(args *MapAskArgs, reply *MapAskReply) error {
-
-	if args.AskForFile == 1 {
-		m1.Lock()
-		reply.WorkerId = workerId
-		workerId++
-		for k, v := range m.MapFileDone {
-			if v == 0 {
-				m.MapFileToWorker[k] = workerId
-				reply.FileName = k
-				v = 1
-				break
+		if m.m_reducedone == false {
+			if m.ReduceDone() {
+				m.m_reducedone = true
+				fmt.Print("Reduce Done (by daemon) \n")
 			}
 		}
-		reply.MapFinish = 0
-		if m.MapDone() == true {
-			reply.MapFinish = 1
-		}
-		m1.Unlock()
+		time.Sleep(time.Second)
 	}
-	fmt.Print("\n")
-	fmt.Print(m.MapFileDone)
-	fmt.Print("\n")
-	return nil
+
 }
 
-//__________________________________________
+//___________________________________________Not Need to Modify____________________________________________________________
 func (m *Master) MapDone() bool {
 	res := true
-	for _, v := range m.MapFileDone {
+	for _, v := range m.MapTask {
 		if v == 0 || v == 1 {
 			return false
 		}
@@ -102,7 +135,7 @@ func (m *Master) MapDone() bool {
 }
 func (m *Master) ReduceDone() bool {
 	res := true
-	for _, v := range m.ReduceFileDone {
+	for _, v := range m.ReduceTask {
 		if v == 0 || v == 1 {
 			return false
 		}
@@ -111,10 +144,10 @@ func (m *Master) ReduceDone() bool {
 
 }
 func (m *Master) Done() bool {
+
 	return m.MapDone() && m.ReduceDone()
 }
 
-//_________________Not Need to Modify___________________________
 //
 // start a thread that listens for RPCs from worker.go
 //
@@ -128,6 +161,7 @@ func (m *Master) server() {
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
+
 	go http.Serve(l, nil)
 }
 
@@ -141,19 +175,38 @@ func (m *Master) server() {
 // main/mrmaster.go calls this function.
 // nReduce is the number of reduce tasks to use.
 //
+func (m *Master) MapReduceSplit(TaskType int, n int) {
+	if TaskType == 1 {
+		m.MapTask = make(map[int]int)
+		m.m_mapdone = false
+		for i := 0; i < n; i++ {
+			m.MapWorkQueue.PushBack(i)
+
+			m.MapTask[i] = 0
+
+		}
+		fmt.Printf("MapWorkQueue len is %v\n", m.MapWorkQueue.Len())
+
+	} else if TaskType == 2 {
+		m.ReduceTask = make(map[int]int)
+		m.m_reducedone = false
+		for i := 0; i < n; i++ {
+			m.ReduceWorkQueue.PushBack(i)
+
+			m.ReduceTask[i] = 0
+		}
+	} else {
+		fmt.Printf("MapReduceSplit error\n")
+	}
+}
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{}
-	m.MapFileToWorker = make(map[string]int)
-	m.MapFileDone = make(map[string]int)
-	m.ReduceFileDone = make(map[string]int)
-	m.ReduceFileToWorker = make(map[string]int)
-
-	for _, filename := range files {
-		m.MapFileDone[filename] = 0
-	}
-
 	// Your code here.
+	nMap := len(files)
+	m.MapReduceSplit(1, nMap)
+	m.MapReduceSplit(2, nReduce)
 	m.server()
+	go m.Daemon()
 	return &m
 }
 

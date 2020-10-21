@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"os"
 	"sort"
+	"strconv"
+	"time"
 )
 import "log"
 import "net/rpc"
@@ -40,18 +42,41 @@ func ihash(key string) int {
 	return int(h.Sum32() & 0x7fffffff)
 }
 
+var ping HeartBeatPing
+
 //
 // main/mrworker.go calls this function.
 //@
+
+func HandleTask(TYPE int, ID int) {
+	fmt.Printf("Finish Handle %v %v\n", TYPE, ID)
+}
+func SendAck(t_TYPE int, t_ID int) HeartBeatPing {
+	ping := HeartBeatPing{t_TYPE, t_ID}
+	return ping
+}
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
+	for {
+		pong := HeartBeatPong{}
+		call("Master.HeartBeatRpc", &ping, &pong)
+		if pong.TYPE == 7 {
+			os.Exit(1)
+		}
+		HandleTask(pong.TYPE, pong.ID)
+		ping = SendAck(pong.TYPE, pong.ID)
+
+		time.Sleep(time.Millisecond * 400)
+		// handle pong
+
+	}
 	// Your worker implementation here.
 	// uncomment to send the Example RPC to the master.
-	DoMap(mapf)
-	intermediate = []KeyValue{}
-	fmt.Print(intermediate)
-	DoReduce(reducef)
+	//DoMap(mapf)
+	//intermediate = []KeyValue{}
+	//fmt.Print(intermediate)
+	//DoReduce(reducef)
 
 }
 func AskForFile() (string, int) {
@@ -78,7 +103,19 @@ func DoMap(mapf func(string, string) []KeyValue) {
 
 		kv := mapf(fileName, string(content))
 		intermediate = append(intermediate, kv...)
-		Encoder(intermediate, fileName)
+		tasks := make([][]KeyValue, 10)
+		for i := 0; i < 10; i++ {
+			tasks[i] = []KeyValue{}
+		}
+		for _, kv := range intermediate {
+			kkk := kv.Key
+			tasks[ihash(kkk)%10] = append(tasks[ihash(kkk)%10], kv)
+		}
+
+		for _, v := range tasks {
+			Encoder(v, fileName)
+		}
+		//Encoder(tasks[0], fileName)
 		args := MapDoneRpcArgs{FileName: fileName}
 		reply := MapDoneRpcReply{}
 		call("Master.PartMapDone", &args, &reply)
@@ -90,12 +127,18 @@ func DoMap(mapf func(string, string) []KeyValue) {
 	}
 }
 
-func Encoder(intermediate []KeyValue, originFileName string) string {
-	oname := originFileName + "temp"
+var gggg = 1
+
+func Encoder(iii []KeyValue, originFileName string) string {
+	oname := "mr-temp-" + strconv.Itoa(gggg)
+	gggg++
 	ofile, _ := os.Create(oname)
 	enc := json.NewEncoder(ofile)
-	for _, v := range intermediate {
-		enc.Encode(&v)
+	for _, v := range iii {
+		err := enc.Encode(&v)
+		if err != nil {
+			fmt.Print("\n,Encode error\n")
+		}
 	}
 	return oname
 }
@@ -105,7 +148,7 @@ func Decode(fileName string) {
 	if err != nil {
 		log.Fatal("open intermediate file fail")
 	}
-	fmt.Print("******* worker.go / 75 line DoReduce *******")
+	//fmt.Print("******* worker.go / 75 line DoReduce *******")
 	dec := json.NewDecoder(file)
 	for {
 		var kv KeyValue
@@ -124,30 +167,34 @@ func AskForReduceFile() (string, int) {
 	return reply.NeedToReduceFileName, reply.ReduceFinish
 }
 func DoReduce(reducef func(string, []string) string) {
-	fmt.Print("\n Now Begin Do Reduce \n")
-	fileName, reduceFinish := AskForReduceFile()
-	fmt.Print("\n Now Begin Do Reduce \n")
-	if fileName != "" {
-		fmt.Print("\n Now Begin Do Decode \n")
-		Decode(fileName)
-		fmt.Print("\n Now Begin Do DoOutPut \n")
+	for i := 1; i < gggg; i++ {
+		name := "mr-temp-" + strconv.Itoa(i)
+		Decode(name)
 		DoOutput(reducef)
-		fmt.Print("\n Now Begin Do RPC \n")
-		args := ReduceDoneRpcArgs{ReduceDoneFileName: fileName}
-		reply := ReduceDoneRpcReply{}
-		call("Master.PartReduceDone", &args, &reply)
 	}
-	fmt.Print("no file")
-	if reduceFinish == 0 {
-		DoReduce(reducef)
-	}
+	//fmt.Print("\n Now Begin Do Reduce \n")
+	//fileName, reduceFinish := AskForReduceFile()
+	//fmt.Print("\n Now Begin Do Reduce \n")
+	//if fileName != "" {
+	//	fmt.Print("\n Now Begin Do Decode \n")
+	//	Decode(fileName)
+	//	fmt.Print("\n Now Begin Do DoOutPut \n")
+	//	DoOutput(reducef)
+	//	fmt.Print("\n Now Begin Do RPC \n")
+	//	args := ReduceDoneRpcArgs{ReduceDoneFileName: fileName}
+	//	reply := ReduceDoneRpcReply{}
+	//	call("Master.PartReduceDone", &args, &reply)
+	//}
+	//fmt.Print("no file")
+	//if reduceFinish == 0 {
+	//	DoReduce(reducef)
+	//}
 
 }
 func DoOutput(reducef func(string, []string) string) {
 	oname := "mr-out-" + string(cout)
 	cout++
 	ofile, _ := os.Create(oname)
-
 	//
 	// call Reduce on each distinct key in intermediate[],
 	// and print the result to mr-out-0.

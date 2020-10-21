@@ -9,6 +9,32 @@ package mr
 import "os"
 import "strconv"
 
+type HeartBeatPing struct {
+	//ack
+	TYPE int // the same as HeartBeatPong
+	ID   int // map task id
+
+}
+type HeartBeatPong struct {
+	TYPE int //
+	/*
+		0 not set strange
+		1 map task
+		2 reduce task
+		3 timeout map task
+		4 timeout reduce task
+
+		5 MapDone
+		6 ReduceDone
+		7 All Done
+	*/
+	ID int //
+	/*
+		map task id
+		or reduce task id
+	*/
+
+}
 type ReduceDoneRpcArgs struct {
 	ReduceDoneFileName string
 }
