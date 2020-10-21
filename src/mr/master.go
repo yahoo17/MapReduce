@@ -29,7 +29,7 @@ func (m *Master) HandleTimeOut(TaskType int, ID int) {
 	go m.AddToQueue(TaskType, ID)
 }
 func (m *Master) AddToQueue(TaskType int, ID int) {
-	time.Sleep(time.Second * 100)
+	time.Sleep(time.Second * 10)
 	if TaskType == 1 {
 		if m.MapTask[ID] != 2 {
 			m.MapWorkQueue.PushBack(ID)
@@ -84,8 +84,7 @@ func (m *Master) AssignTask() (TYPE int, ID int) {
 }
 
 func (m *Master) HeartBeatRpc(ping *HeartBeatPing, pong *HeartBeatPong) error {
-	//Handle ASSIGN TASK_____________________
-	//____________________
+
 	if ping.TYPE == 1 {
 		m.MapTask[ping.ID] = 2
 		fmt.Printf("TYPE %v ID %v Done \n", ping.TYPE, ping.ID)
@@ -93,7 +92,7 @@ func (m *Master) HeartBeatRpc(ping *HeartBeatPing, pong *HeartBeatPong) error {
 		fmt.Printf("TYPE %v ID %v Done \n", ping.TYPE, ping.ID)
 		m.ReduceTask[ping.ID] = 2
 	}
-
+	//________________-Handle ASSIGN TASK_____________________
 	pong.TYPE, pong.ID = m.AssignTask()
 	return nil
 }
@@ -143,6 +142,12 @@ func (m *Master) ReduceDone() bool {
 	return res
 
 }
+
+//
+// main/mrmaster.go calls Done() periodically to find out
+// if the entire job has finished.
+//
+
 func (m *Master) Done() bool {
 
 	return m.MapDone() && m.ReduceDone()
@@ -164,11 +169,6 @@ func (m *Master) server() {
 
 	go http.Serve(l, nil)
 }
-
-//
-// main/mrmaster.go calls Done() periodically to find out
-// if the entire job has finished.
-//
 
 //
 // create a Master.

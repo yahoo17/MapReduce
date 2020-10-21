@@ -49,7 +49,7 @@ var ping HeartBeatPing
 //@
 
 func HandleTask(TYPE int, ID int) {
-	fmt.Printf("Finish Handle %v %v\n", TYPE, ID)
+	fmt.Printf("Get the task to Handle %v %v\n", TYPE, ID)
 }
 func SendAck(t_TYPE int, t_ID int) HeartBeatPing {
 	ping := HeartBeatPing{t_TYPE, t_ID}
@@ -57,14 +57,19 @@ func SendAck(t_TYPE int, t_ID int) HeartBeatPing {
 }
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
-
+	hasHulue := false
 	for {
 		pong := HeartBeatPong{}
+		if ping.ID == 5 && hasHulue == false {
+			hasHulue = true
+			ping = HeartBeatPing{}
+		}
 		call("Master.HeartBeatRpc", &ping, &pong)
 		if pong.TYPE == 7 {
 			os.Exit(1)
 		}
 		HandleTask(pong.TYPE, pong.ID)
+
 		ping = SendAck(pong.TYPE, pong.ID)
 
 		time.Sleep(time.Millisecond * 400)
