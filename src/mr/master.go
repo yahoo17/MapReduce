@@ -33,6 +33,8 @@ type Master struct {
 func (m *Master) SayHelloRpc(hello *SayHello, reply *SayHelloReply) error {
 	reply.NReduce = m.m_nReduce
 	reply.NMap = m.m_nMap
+	temp := "mr-inter-" + strconv.Itoa(hello.ID) + ".txt"
+	reply.OriginFileName = tempToorigin[temp]
 	return nil
 
 }
@@ -98,9 +100,9 @@ func (m *Master) HeartBeatRpc(ping *HeartBeatPing, pong *HeartBeatPong) error {
 
 	if ping.TYPE == 1 {
 		m.MapTask[ping.ID] = 2
-		fmt.Printf("TYPE %v ID %v Done \n", ping.TYPE, ping.ID)
+		//fmt.Printf("TYPE %v ID %v Done \n", ping.TYPE, ping.ID)
 	} else if ping.TYPE == 2 {
-		fmt.Printf("TYPE %v ID %v Done \n", ping.TYPE, ping.ID)
+		//fmt.Printf("TYPE %v ID %v Done \n", ping.TYPE, ping.ID)
 		m.ReduceTask[ping.ID] = 2
 	}
 	//________________-Handle ASSIGN TASK_____________________
@@ -221,7 +223,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 
 		filename := "mr-inter-" + strconv.Itoa(i) + ".txt"
 		tempToorigin[filename] = v
-		fmt.Printf("the file name is %v\n", v)
+		//fmt.Printf("the file name is %v  %v\n", filename,v)
 		ofile, err := os.Create(filename)
 		if err != nil {
 			log.Fatal("open file error\n")

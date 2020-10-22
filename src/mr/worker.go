@@ -64,8 +64,12 @@ func HandleTask(TYPE int, ID int) {
 			log.Fatal("read file error %v", err)
 
 		}
-		originFile := tempToorigin[filename]
-		fmt.Printf("the originFileName is %v\n", originFile)
+		arg := SayHello{ID: ID}
+		reply := SayHelloReply{}
+		call("Master.SayHelloRpc", &arg, &reply)
+		originFile := reply.OriginFileName
+
+		//fmt.Printf("the originFileName is %v %v\n",filename, originFile)
 		kv := mapf(originFile, string(content))
 		intermediate = []KeyValue{}
 		intermediate = append(intermediate, kv...)
@@ -124,7 +128,7 @@ func Worker(t_mapf func(string, string) []KeyValue,
 	call("Master.SayHelloRpc", &arg, &reply)
 	m_Nmap = reply.NMap
 	m_Nreduce = reply.NReduce
-	fmt.Printf("the map and reduce is %v %v\n", m_Nmap, m_Nreduce)
+	//fmt.Printf("the map and reduce is %v %v\n", m_Nmap, m_Nreduce)
 	mapf = t_mapf
 	reducef = t_reducef
 

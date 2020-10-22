@@ -10,11 +10,12 @@ import "os"
 import "strconv"
 
 type SayHello struct {
-	X int
+	ID int
 }
 type SayHelloReply struct {
-	NReduce int
-	NMap    int
+	NReduce        int
+	NMap           int
+	OriginFileName string
 }
 type HeartBeatPing struct {
 	//ack
@@ -42,45 +43,8 @@ type HeartBeatPong struct {
 	*/
 
 }
-type ReduceDoneRpcArgs struct {
-	ReduceDoneFileName string
-}
-type ReduceDoneRpcReply struct {
-	Ack bool
-}
-
-//rpcname+Args
-//__________________________
-type ReduceRpcArgs struct {
-	AskForReduceFile int
-}
-type ReduceRpcReply struct {
-	NeedToReduceFileName string
-	WorkerId             int
-	ReduceFinish         int
-}
 
 //___________________________________
-
-//____________________________________
-type MapDoneRpcArgs struct {
-	FileName string
-}
-type MapDoneRpcReply struct {
-	Ack bool
-}
-
-//___________________________
-
-//___________________________
-type MapAskArgs struct {
-	AskForFile int
-}
-type MapAskReply struct {
-	FileName  string //MapAsk return file name
-	WorkerId  int
-	MapFinish int
-}
 
 //____________________________
 

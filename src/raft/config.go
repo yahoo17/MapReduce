@@ -70,7 +70,7 @@ func make_config(t *testing.T, n int, unreliable bool) *config {
 	cfg.net = labrpc.MakeNetwork()
 	cfg.n = n
 	cfg.applyErr = make([]string, cfg.n)
-	cfg.rafts = make([]*Raft, cfg.n)
+	cfg.rafts = make([]*Raft, cfg.n) //cfg create n Raft server
 	cfg.connected = make([]bool, cfg.n)
 	cfg.saved = make([]*Persister, cfg.n)
 	cfg.endnames = make([][]string, cfg.n)
