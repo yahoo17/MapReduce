@@ -1,0 +1,26 @@
+*** Starting wc test.
+MapWorkQueue len is 8
+Map Done (by daemon) 
+Reduce Done (by daemon) 
+--- wc test: PASS
+*** Starting indexer test.
+MapWorkQueue len is 8
+Map Done (by daemon) 
+Reduce Done (by daemon) 
+--- indexer test: PASS
+*** Starting map parallelism test.
+MapWorkQueue len is 8
+Map Done (by daemon) 
+Reduce Done (by daemon) 
+--- map parallelism test: PASS
+*** Starting reduce parallelism test.
+MapWorkQueue len is 8
+Map Done (by daemon) 
+Reduce Done (by daemon) 
+--- reduce parallelism test: PASS
+*** Starting crash test.
+MapWorkQueue len is 8
+Map Done (by daemon) 
+Reduce Done (by daemon) 
+--- crash test: PASS
+*** PASSED ALL TESTS
