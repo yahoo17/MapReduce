@@ -27,7 +27,8 @@ go build -buildmode=plugin ../mrapps/wc.go
 程序可以通过加载wc.so里面包含的map函数和reduce函数来对输入进行处理
 ```
 
-运行方法
+#### 运行方法
+
 1.开一个终端, 进入到src/main下 go run mrmaster.go pg-*.txt
 
 2.开另外一个(或多个) 终端 
