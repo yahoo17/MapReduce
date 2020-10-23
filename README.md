@@ -1,7 +1,9 @@
 # Mit6.824
-distribution system
+
+distribute  system labs, now finish Lab1
 
 
+#### If you are student at M.I.T, please ignore this respository, teacher suggest you done it by u self
 ## Lab1
 
 #### 快速运行测试
