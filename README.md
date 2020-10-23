@@ -6,6 +6,9 @@ distribute  system labs, now finish Lab1
 #### If you are student at M.I.T, please ignore this respository, teacher suggest you done it by u self
 ## Lab1
 
+1.完成一个mapReduce框架, 可以对数据进行自定义的map操作和 reduce 操作 ,实现分布式处理 \n
+2.提供容错机制, worker节点挂掉后, master节点有超时机制, 会把worker节点未完成的任务派给其他节点
+3.通过动态库插件来更换自定义的函数 
 #### 快速运行测试
 只要您在linux下(例如Ubuntu 20.04) 下安装了golang环境, 执行以下命令就可以快速跑起来
 ```
@@ -14,9 +17,7 @@ cd /src/main
 sh test-mr.sh
 ```
 
-1.完成一个mapReduce框架, 可以对数据进行自定义的map操作和 reduce 操作 ,实现分布式处理 
-2.提供容错机制, worker节点挂掉后, master节点有超时机制, 会把worker节点未完成的任务派给其他节点
-3.通过动态库插件来更换自定义的函数 
+
 ```
 go build -buildmode=plugin ../mrapps/wc.go
 例如 ,这句话会生成wc.so动态库
