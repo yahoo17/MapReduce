@@ -4,6 +4,14 @@ distribution system
 
 ## Lab1
 
+#### 快速运行测试
+只要您在linux下(例如Ubuntu 20.04) 下安装了golang环境, 执行以下命令就可以快速跑起来
+```
+sudo apt install golang (没安装golang可以通过这条命令, Ubuntu20.04 安装的是golang 13 算比较新
+cd /src/main
+sh test-mr.sh
+```
+
 1.完成一个mapReduce框架, 可以对数据进行自定义的map操作和 reduce 操作 ,实现分布式处理 
 2.提供容错机制, worker节点挂掉后, master节点有超时机制, 会把worker节点未完成的任务派给其他节点
 3.通过动态库插件来更换自定义的函数 
